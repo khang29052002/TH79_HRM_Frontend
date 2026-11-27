@@ -1,10 +1,10 @@
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useState} from 'react';
 import {Link,useNavigate,useParams} from 'react-router-dom';
 import {
-  ArrowLeft,Edit3,Phone,Mail,CloudUpload,FileText,FileCheck2,FileWarning,
-  CalendarDays,FolderCheck,FileSignature,TriangleAlert,BadgeCheck,Contact,
-  WalletCards,History,UserRound,BriefcaseBusiness,ShieldCheck,Paperclip,
-  Eye,Download,Trash2,Plus,ScanLine,Sparkles,Clock3,LockKeyhole
+  ArrowLeft,Edit3,CloudUpload,FileText,FileCheck2,FileWarning,
+  CalendarDays,FileSignature,TriangleAlert,BadgeCheck,
+  History,ShieldCheck,Paperclip,Eye,Download,Trash2,ScanLine,
+  ChevronDown,ChevronRight,LockKeyhole,SquarePen
 } from 'lucide-react';
 import {api,apiUrl} from '../lib/api';
 import {Badge,Empty,Loading} from '../components/ui';
@@ -23,6 +23,8 @@ export default function EmployeeDetail(){
   const [error,setError]=useState('');
   const [refresh,setRefresh]=useState(0);
   const [toast,setToast]=useState(null);
+  const [tab,setTab]=useState('personal');
+  const [openAcc,setOpenAcc]=useState({personal:true,bank:false,docs:false});
   const invalidId=!id||['undefined','null'].includes(String(id));
 
   useEffect(()=>{
@@ -69,7 +71,6 @@ export default function EmployeeDetail(){
 
   const documentByType=new Map(docs.map(d=>[Number(d.document_type_id),d]));
   const completedRequired=requiredTypes.filter(t=>documentIsPresent(documentByType.get(Number(t.id))));
-  const missingRequired=Math.max(0,requiredTypes.length-completedRequired.length);
   const coreFields=['employee_code','full_name','branch_name','department_name','position_name','phone','email','join_date','employment_status','recruitment_decision_no'];
   const corePercent=Math.round(coreFields.filter(k=>Boolean(e[k])).length/coreFields.length*100);
   const docPercent=requiredTypes.length?Math.round(completedRequired.length/requiredTypes.length*100):100;
@@ -77,9 +78,9 @@ export default function EmployeeDetail(){
   const contractPercent=activeContract?100:(contracts.length?55:0);
   const profileScore=clamp(Math.round(corePercent*.45+docPercent*.35+contractPercent*.20),0,100);
   const tenure=tenureLabel(e.join_date);
-
   const journey=buildJourney(e,contracts,decisions,data.history||[]);
   const probation=probationState(e);
+  const toggleAcc=k=>setOpenAcc(prev=>({...prev,[k]:!prev[k]}));
 
   const remove=async()=>{
     if(!employeeId)return;
@@ -88,124 +89,189 @@ export default function EmployeeDetail(){
     catch(err){setError(err.message||'Không thể xóa hồ sơ.');}
   };
 
-  return <div className="employee-detail-v83">
+  return <div className="emp-sheet-page">
     {toast&&<div key={toast.key} className={`app-toast ${toast.tone}`} role="status">{toast.tone==='error'?<TriangleAlert/>:<BadgeCheck/>}<span>{toast.message}</span><button type="button" onClick={()=>setToast(null)}>×</button></div>}
-    <section className="ed-profile-head card digital-identity-card">
-      <div className="ed-profile-main">
-        <span className="ed-avatar">{initials(e.full_name)}</span>
-        <div className="ed-profile-copy">
-          <span className="digital-id-label"><ShieldCheck/> DIGITAL EMPLOYEE ID</span>
-          <div className="ed-title-line"><h1>{e.full_name}</h1><Badge value={e.employment_status}/></div>
-          <p>{e.employee_code} · {e.position_name||'Chưa cập nhật chức vụ'} · {e.branch_name||'Chưa cập nhật chi nhánh'}</p>
-          <div className="ed-contact-line"><span><Phone/> {e.phone||'Chưa có SĐT'}</span><span><Mail/> {e.email||'Chưa có email'}</span></div>
+
+    <div className="emp-sheet-topbar">
+      <button type="button" className="btn ghost small" onClick={()=>nav('/employees')}><ArrowLeft size={15}/> Danh sách</button>
+      <div className="emp-sheet-title-wrap">
+        <h1>THÔNG TIN NHÂN VIÊN</h1>
+        <div className="emp-sheet-sub">
+          <span className="emp-mini-avatar">{initials(e.full_name)}</span>
+          <strong>{e.full_name}</strong>
+          <span>· {e.employee_code} ·</span>
+          <Badge value={e.employment_status}/>
+          <span className="emp-score-chip">{profileScore}% hoàn thiện</span>
         </div>
       </div>
-      <div className="ed-head-actions">
-        <button className="btn ghost" onClick={()=>nav('/employees')}><ArrowLeft/> Danh sách</button>
-        {has('document.upload')&&<a className="btn ghost" href="#documents"><CloudUpload/> Bổ sung hồ sơ</a>}
-        {has('employee.update')&&employeeId&&<Link className="btn primary" to={`/employees/${encodeURIComponent(employeeId)}/edit`}><Edit3/> Chỉnh sửa</Link>}
+      <div className="emp-sheet-actions">
+        {has('employee.update')&&employeeId&&<Link className="btn primary small" to={`/employees/${encodeURIComponent(employeeId)}/edit`}><Edit3 size={15}/> Chỉnh sửa</Link>}
       </div>
-    </section>
+    </div>
 
     {probation.show&&<div className={`ed-probation-alert ${probation.tone}`}>
       <TriangleAlert/>
       <div><strong>{probation.title}</strong><span>{probation.detail}</span></div>
     </div>}
 
-    <section className="ed-360 card">
-      <div className="ed-360-main">
-        <div className="ed-score-ring" style={{'--score':`${profileScore*3.6}deg`}}><div><strong>{profileScore}%</strong><span>Hồ sơ 360°</span></div></div>
-        <div className="ed-360-copy">
-          <span className="ed-kicker"><Sparkles/> EMPLOYEE 360°</span>
-          <h2>{profileScore>=85?'Hồ sơ đã khá hoàn thiện':profileScore>=60?'Hồ sơ cần bổ sung thêm':'Cần ưu tiên hoàn thiện hồ sơ'}</h2>
-          <p>Đánh giá tự động từ thông tin công việc, hồ sơ bắt buộc và hợp đồng hiện có.</p>
-        </div>
-      </div>
-      <div className="ed-360-metrics">
-        <Metric icon={CalendarDays} label="Thâm niên" value={tenure}/>
-        <Metric icon={FolderCheck} label="Hồ sơ bắt buộc" value={`${completedRequired.length}/${requiredTypes.length} hoàn tất`} tone="amber"/>
-        <Metric icon={FileSignature} label="Hợp đồng" value={activeContract?'Đang hiệu lực':contracts.length?'Cần kiểm tra':'Chưa có'} tone="violet"/>
-        <Metric icon={missingRequired?TriangleAlert:BadgeCheck} label="Cần xử lý" value={missingRequired?`${missingRequired} hồ sơ thiếu`:'Không có hồ sơ thiếu'} tone={missingRequired?'rose':'green'}/>
-      </div>
-    </section>
-
-    <nav className="ed-tabs" aria-label="Điều hướng hồ sơ">
-      <a href="#info" className="active"><Contact/> Thông tin</a>
-      {has('document.view')&&<a href="#documents"><FolderCheck/> Hồ sơ giấy tờ</a>}
-      {has('contract.view')&&<a href="#contracts"><FileSignature/> Hợp đồng</a>}
-      {has('payroll.view')&&<a href="#salary"><WalletCards/> Lương</a>}
-      <a href="#history"><History/> Hành trình 360°</a>
-    </nav>
-
-    <div className="ed-info-grid" id="info">
-      <section className="card ed-info-card">
-        <SectionHead title="Thông tin cá nhân" subtitle="Thông tin định danh và liên hệ" icon={UserRound}/>
-        <div className="ed-detail-grid">
-          <Detail label="Giới tính" value={genderLabel(e.gender)}/>
-          <Detail label="Trình độ chuyên môn" value={e.professional_qualification}/>
-          <Detail label="Số điện thoại" value={e.phone}/>
-          <Detail label="Email" value={e.email}/>
-          {has('employee.sensitive.view')?<>
-            <Detail label="Ngày sinh" value={fmtDate(e.date_of_birth)}/>
-            <Detail label="CMND/CCCD" value={e.identity_number}/>
-            <Detail label="Số BHXH" value={e.social_insurance_number||e.social_insurance_raw||'Chưa có mã'}/>
-            <Detail label="Trạng thái BHXH" value={insuranceLabel(e.social_insurance_status)}/>
-            <Detail label="Thường trú" value={e.permanent_address} full/>
-            <Detail label="Nơi ở hiện tại" value={e.current_address} full/>
-          </>:<div className="ed-sensitive-locked"><LockKeyhole/><span><strong>Dữ liệu nhạy cảm đã được ẩn</strong><small>Cần quyền xem dữ liệu nhân sự nhạy cảm để xem ngày sinh, CCCD, BHXH và địa chỉ.</small></span></div>}
-        </div>
-      </section>
-
-      <section className="card ed-info-card">
-        <SectionHead title="Thông tin công việc" subtitle="Đơn vị và tình trạng làm việc" icon={BriefcaseBusiness}/>
-        <div className="ed-detail-grid single">
-          <Detail label="Chi nhánh" value={e.branch_name}/>
-          <Detail label="Phòng ban" value={e.department_name}/>
-          <Detail label="Chức vụ" value={e.position_name}/>
-          <Detail label="Ngày nhận việc" value={fmtDate(e.join_date)}/>
-          <Detail label="Hết hạn thử việc" value={fmtDate(e.probation_end_date||e.probation_due_date)}/>
-          <Detail label="Số QĐ tuyển dụng" value={e.recruitment_decision_no}/>
-          <Detail label="Tình trạng hợp đồng" value={e.contract_status_name||e.contract_status}/>
-          <Detail label="Ghi chú" value={e.note||'Không có ghi chú'} full/>
-        </div>
-      </section>
+    <div className="emp-seg-tabs" role="tablist">
+      <button type="button" className={tab==='work'?'active':''} onClick={()=>setTab('work')}>Thông tin làm việc</button>
+      <button type="button" className={tab==='personal'?'active':''} onClick={()=>setTab('personal')}>Thông tin nhân viên</button>
+      {(has('contract.view')||has('payroll.view'))&&<button type="button" className={tab==='contract_salary'?'active':''} onClick={()=>setTab('contract_salary')}>Hợp đồng &amp; Lương</button>}
+      <button type="button" className={tab==='history'?'active':''} onClick={()=>setTab('history')}>Lịch sử ({journey.length})</button>
     </div>
 
-    {has('document.view')&&<section className="card ed-section" id="documents">
-      <SectionHead title="Hồ sơ giấy tờ" subtitle="Kho hồ sơ số của nhân viên · PDF và ảnh scan lưu trong kho riêng" right={<span className="ed-storage-pill"><ShieldCheck/> Kho lưu trữ sẵn sàng</span>}/>
-      {has('document.upload')&&<div className="ed-storage-ready"><ShieldCheck/><span>Chọn file ngay tại từng loại hồ sơ bên dưới. File được tải qua API có phân quyền và không công khai trực tiếp.</span></div>}
-      <div className="ed-document-grid">
-        {docTypes.map((type,i)=><DocumentCard key={entityKey(type,`doc-type-${i}`)} type={type} doc={documentByType.get(Number(type.id))} employeeId={employeeId} canUpload={has('document.upload')} canDelete={has('document.delete')} onChanged={reload} notify={notify}/>) }
+    <div className="emp-sheet-body card">
+      {tab==='work'&&<div className="emp-acc-panel">
+        <div className="emp-acc-head static">
+          <SquarePen size={17}/>
+          <strong>Thông tin làm việc</strong>
+          <small>Thâm niên: {tenure}</small>
+        </div>
+        <div className="emp-hform">
+          <ViewRow label="Mã nhân viên / Trạng thái:">
+            <div className="emp-hrow-pair">
+              <ValBox value={e.employee_code}/>
+              <ValBox value={statusTitle(e.employment_status)}/>
+            </div>
+          </ViewRow>
+          <ViewRow label="Chi nhánh / Phòng ban:">
+            <div className="emp-hrow-pair">
+              <ValBox value={e.branch_name}/>
+              <ValBox value={e.department_name}/>
+            </div>
+          </ViewRow>
+          <ViewRow label="Chức vụ / QĐ tuyển dụng:">
+            <div className="emp-hrow-pair">
+              <ValBox value={e.position_name}/>
+              <ValBox value={e.recruitment_decision_no}/>
+            </div>
+          </ViewRow>
+          <ViewRow label="Ngày nhận việc / Hết thử việc:">
+            <div className="emp-hrow-pair">
+              <ValBox value={fmtDate(e.join_date)}/>
+              <ValBox value={fmtDate(e.probation_end_date||e.probation_due_date)}/>
+            </div>
+          </ViewRow>
+          <ViewRow label="Tình trạng hợp đồng:">
+            <ValBox value={e.contract_status_name||e.contract_status}/>
+          </ViewRow>
+          <ViewRow label="Ghi chú nội bộ:">
+            <ValBox value={e.note||'Không có ghi chú'}/>
+          </ViewRow>
+        </div>
+      </div>}
+
+      {tab==='personal'&&<>
+        <div className="emp-acc-panel">
+          <button type="button" className="emp-acc-head" onClick={()=>toggleAcc('personal')}>
+            <SquarePen size={17}/>
+            <strong>Thông tin cá nhân</strong>
+            {openAcc.personal?<ChevronDown size={17}/>:<ChevronRight size={17}/>}
+          </button>
+          {openAcc.personal&&<div className="emp-hform">
+            <ViewRow label="Mã nhân viên:"><ValBox value={e.employee_code} muted/></ViewRow>
+            <ViewRow label="Họ và tên nhân viên:"><ValBox value={e.full_name}/></ViewRow>
+            <ViewRow label="Trình độ chuyên môn:"><ValBox value={e.professional_qualification}/></ViewRow>
+            <ViewRow label="SĐT / Mail:">
+              <div className="emp-hrow-pair">
+                <ValBox value={e.phone}/>
+                <ValBox value={e.email}/>
+              </div>
+            </ViewRow>
+            {has('employee.sensitive.view')?<>
+              <ViewRow label="Số CCCD:"><ValBox value={e.identity_number}/></ViewRow>
+              <ViewRow label="Ngày sinh / Giới tính:">
+                <div className="emp-hrow-pair">
+                  <ValBox value={fmtDate(e.date_of_birth)}/>
+                  <ValBox value={genderLabel(e.gender)}/>
+                </div>
+              </ViewRow>
+              <ViewRow label="Thường trú:"><ValBox value={e.permanent_address}/></ViewRow>
+              <ViewRow label="Nơi ở hiện tại:"><ValBox value={e.current_address}/></ViewRow>
+              <ViewRow label="Số BHXH / Tình trạng:">
+                <div className="emp-hrow-pair">
+                  <ValBox value={e.social_insurance_number||e.social_insurance_raw}/>
+                  <ValBox value={insuranceLabel(e.social_insurance_status)}/>
+                </div>
+              </ViewRow>
+            </>:<div className="ed-sensitive-locked"><LockKeyhole/><span><strong>Dữ liệu nhạy cảm đã được ẩn</strong><small>Cần quyền xem dữ liệu nhạy cảm để xem ngày sinh, CCCD, BHXH và địa chỉ.</small></span></div>}
+          </div>}
+        </div>
+
+        <div className="emp-acc-panel">
+          <button type="button" className="emp-acc-head" onClick={()=>toggleAcc('bank')}>
+            <SquarePen size={17}/>
+            <strong>Thông tin ngân hàng</strong>
+            {openAcc.bank?<ChevronDown size={17}/>:<ChevronRight size={17}/>}
+          </button>
+          {openAcc.bank&&<div className="emp-hform">
+            <ViewRow label="Số tài khoản / Ngân hàng:">
+              <div className="emp-hrow-pair">
+                <ValBox value={e.bank_account_number}/>
+                <ValBox value={e.bank_name}/>
+              </div>
+            </ViewRow>
+            <ViewRow label="Số người phụ thuộc:"><ValBox value={String(e.tax_dependents??0)}/></ViewRow>
+          </div>}
+        </div>
+
+        {has('document.view')&&<div className="emp-acc-panel">
+          <button type="button" className="emp-acc-head" onClick={()=>toggleAcc('docs')}>
+            <SquarePen size={17}/>
+            <strong>Thông tin hồ sơ</strong>
+            <small>{completedRequired.length}/{requiredTypes.length} bắt buộc</small>
+            {openAcc.docs?<ChevronDown size={17}/>:<ChevronRight size={17}/>}
+          </button>
+          {openAcc.docs&&<div className="ed-document-grid" style={{paddingTop:12}}>
+            {docTypes.map((type,i)=><DocumentCard key={entityKey(type,`doc-type-${i}`)} type={type} doc={documentByType.get(Number(type.id))} employeeId={employeeId} canUpload={has('document.upload')} canDelete={has('document.delete')} onChanged={reload} notify={notify}/>)}
+          </div>}
+        </div>}
+      </>}
+
+      {tab==='contract_salary'&&<div className="emp-acc-stack">
+        {has('contract.view')&&<ContractsSection employeeId={employeeId} employee={e} contracts={contracts} contractTypes={data.contractTypes||[]} canManage={has('contract.manage')} canUpload={has('contract.upload')} onChanged={reload} notify={notify}/>}
+        {has('payroll.view')&&<section className="ed-section" id="salary" style={{marginTop:16}}>
+          <SectionHead title="Thông tin lương" subtitle="Lịch sử cấu hình lương theo thời gian" right={<Link to="/payroll" className="ed-text-link">Mở tiền lương</Link>}/>
+          <div className="ed-table-wrap"><table className="ed-table"><thead><tr><th>Hiệu lực từ</th><th>Lương chính thức</th><th>Lương thử việc</th><th>Lương đóng BH</th><th>Ăn trưa</th><th>Xăng xe</th><th>Điện thoại</th><th>Chuyên cần</th></tr></thead><tbody>
+            {salaryProfiles.length?salaryProfiles.map((s,i)=><tr key={entityKey(s,`salary-${i}`)}><td>{fmtDate(s.effective_from)}</td><td>{money(s.base_salary)}</td><td>{money(s.probation_salary)}</td><td>{money(s.insurance_salary||s.base_salary)}</td><td>{money(s.lunch_allowance)}</td><td>{money(s.fuel_allowance)}</td><td>{money(s.phone_allowance)}</td><td>{money(s.attendance_allowance)}</td></tr>):<tr><td colSpan="8" className="ed-empty-cell">Chưa cấu hình hồ sơ lương.</td></tr>}
+          </tbody></table></div>
+        </section>}
+      </div>}
+
+      {tab==='history'&&<div className="emp-acc-panel">
+        <div className="emp-acc-head static">
+          <History size={17}/>
+          <strong>Hành trình nhân sự</strong>
+          <small>{journey.length} mốc</small>
+        </div>
+        <div className="ed-journey-list">
+          {journey.length?journey.map((event,i)=><div className="ed-journey-event" key={`${event.date}-${event.title}-${i}`}>
+            <div className="ed-journey-rail"><span className={`ed-journey-dot ${event.tone||'blue'}`}>{event.icon==='contract'?<FileSignature/>:event.icon==='decision'?<BadgeCheck/>:<CalendarDays/>}</span></div>
+            <div className="ed-journey-date">{fmtDate(event.date)}</div>
+            <div className="ed-journey-copy"><strong>{event.title}</strong><span>{event.meta}</span></div>
+          </div>):<Empty title="Chưa có dữ liệu hành trình nhân sự"/>}
+        </div>
+        {has('employee.delete')&&<div className="ed-danger-zone"><button className="btn danger small" onClick={remove}><Trash2/> Xóa mềm hồ sơ nhân viên</button></div>}
+      </div>}
+
+      <div className="emp-sheet-footer">
+        <button type="button" className="btn emp-done-btn" onClick={()=>nav('/employees')}>Hoàn tất</button>
       </div>
-    </section>}
-
-    {has('contract.view')&&<ContractsSection employeeId={employeeId} employee={e} contracts={contracts} contractTypes={data.contractTypes||[]} canManage={has('contract.manage')} canUpload={has('contract.upload')} onChanged={reload} notify={notify}/>} 
-
-    {has('payroll.view')&&<section className="card ed-section" id="salary">
-      <SectionHead title="Thông tin lương" subtitle="Lịch sử cấu hình lương theo thời gian" right={<Link to="/payroll" className="ed-text-link">Mở tiền lương</Link>}/>
-      <div className="ed-table-wrap"><table className="ed-table"><thead><tr><th>Hiệu lực từ</th><th>Lương chính thức</th><th>Lương thử việc</th><th>Lương đóng BH</th><th>Ăn trưa</th><th>Xăng xe</th><th>Điện thoại</th><th>Chuyên cần</th></tr></thead><tbody>
-        {salaryProfiles.length?salaryProfiles.map((s,i)=><tr key={entityKey(s,`salary-${i}`)}><td>{fmtDate(s.effective_from)}</td><td>{money(s.base_salary)}</td><td>{money(s.probation_salary)}</td><td>{money(s.insurance_salary||s.base_salary)}</td><td>{money(s.lunch_allowance)}</td><td>{money(s.fuel_allowance)}</td><td>{money(s.phone_allowance)}</td><td>{money(s.attendance_allowance)}</td></tr>):<tr><td colSpan="8" className="ed-empty-cell">Chưa cấu hình hồ sơ lương.</td></tr>}
-      </tbody></table></div>
-    </section>}
-
-    <section className="card ed-section ed-journey" id="history">
-      <SectionHead title="Hành trình nhân sự 360°" subtitle="Các mốc nhận việc, hợp đồng và quyết định quan trọng theo thời gian" right={<span className="ed-count-pill"><History/> {journey.length} mốc</span>}/>
-      <div className="ed-journey-list">
-        {journey.length?journey.map((event,i)=><div className="ed-journey-event" key={`${event.date}-${event.title}-${i}`}>
-          <div className="ed-journey-rail"><span className={`ed-journey-dot ${event.tone||'blue'}`}>{event.icon==='contract'?<FileSignature/>:event.icon==='decision'?<BadgeCheck/>:<CalendarDays/>}</span></div>
-          <div className="ed-journey-date">{fmtDate(event.date)}</div>
-          <div className="ed-journey-copy"><strong>{event.title}</strong><span>{event.meta}</span></div>
-        </div>):<Empty title="Chưa có dữ liệu hành trình nhân sự"/>}
-      </div>
-    </section>
-
-    {has('employee.delete')&&<div className="ed-danger-zone"><button className="btn danger" onClick={remove}><Trash2/> Xóa mềm hồ sơ nhân viên</button></div>}
+    </div>
   </div>;
 }
 
-function Metric({icon:Icon,label,value,tone='blue'}){return <div className="ed-metric"><span className={`ed-metric-icon ${tone}`}><Icon/></span><span><small>{label}</small><strong>{value}</strong></span></div>}
-function SectionHead({title,subtitle,icon:Icon,right}){return <div className="ed-section-head"><div><h2>{title}</h2><p>{subtitle}</p></div>{right||<Icon/>}</div>}
-function Detail({label,value,full=false}){return <div className={`ed-detail ${full?'full':''}`}><span>{label}</span><strong>{value||'Chưa cập nhật'}</strong></div>}
+function ViewRow({label,children}){
+  return <div className="emp-hrow">
+    <div className="emp-hlabel">{label}</div>
+    <div className="emp-hfield">{children}</div>
+  </div>;
+}
+function ValBox({value,muted=false}){
+  return <div className={`emp-val-box ${muted?'muted':''}`}>{value||'Chưa cập nhật'}</div>;
+}
+function SectionHead({title,subtitle,icon:Icon,right}){return <div className="ed-section-head"><div><h2>{title}</h2><p>{subtitle}</p></div>{right||(Icon&&<Icon/>)}</div>}
 
 function DocumentCard({type,doc,employeeId,canUpload,canDelete,onChanged,notify}){
   const [file,setFile]=useState(null);
@@ -255,7 +321,6 @@ function DocumentCard({type,doc,employeeId,canUpload,canDelete,onChanged,notify}
     </div>
 
     {hasDigital&&<div className="ed-doc-files">
-      <div className="ed-doc-files-head"><strong><FolderCheck/> Giấy tờ đã tải lên</strong><span><ShieldCheck/> Đã số hóa</span></div>
       {files.length?files.map((f,i)=><div className="ed-doc-file" key={entityKey(f,`file-${i}`)}>
         <span className="ed-file-type"><FileText/></span>
         <div><strong>{f.original_name||'Tệp hồ sơ'}</strong><small>{formatBytes(f.file_size)} · {fmtDate(f.uploaded_at||f.created_at)}</small></div>
@@ -292,10 +357,10 @@ function ContractsSection({employeeId,employee,contracts,contractTypes,canManage
     finally{setBusy(false);}
   };
 
-  return <section className="card ed-section" id="contracts">
+  return <section className="ed-section" id="contracts">
     <SectionHead title="Hợp đồng lao động" subtitle="Quản lý hợp đồng và file PDF/ảnh scan của từng nhân viên" right={<Link to="/contracts" className="ed-text-link">Quản lý hợp đồng</Link>}/>
     {canManage&&<div className="ed-contract-panel">
-      <div className="ed-contract-title"><span><FileSignature/></span><div><strong>Thêm & tải hợp đồng nhân viên</strong><small>Có thể tạo hợp đồng và đính kèm PDF/ảnh scan cùng lúc.</small></div></div>
+      <div className="ed-contract-title"><span><FileSignature/></span><div><strong>Thêm &amp; tải hợp đồng nhân viên</strong><small>Có thể tạo hợp đồng và đính kèm PDF/ảnh scan cùng lúc.</small></div></div>
       <form className="ed-contract-form" onSubmit={submit}>
         <label className="type"><span>Loại hợp đồng</span><select value={form.contract_type_id} onChange={e=>change('contract_type_id',e.target.value)} required><option value="">Chọn loại hợp đồng</option>{contractTypes.map((t,i)=><option key={entityKey(t,`ct-${i}`)} value={entityId(t)}>{t.contract_type_name}</option>)}</select></label>
         <label className="number"><span>Số hợp đồng</span><input value={form.contract_no} onChange={e=>change('contract_no',e.target.value)} placeholder="Ví dụ: HĐLĐ-001/2026"/></label>

@@ -5,10 +5,9 @@ export function Loading({label='Đang tải dữ liệu...'}){
   return <div className="loading"><LoaderCircle className="spin" size={28}/><span>{label}</span></div>;
 }
 
-export function PageHeader({eyebrow,title,subtitle,actions}){
+export function PageHeader({title,subtitle,actions}){
   return <div className="page-heading page-header">
     <div>
-      {eyebrow&&<span className="eyebrow">{eyebrow}</span>}
       <h1>{title}</h1>
       {subtitle&&<p>{subtitle}</p>}
     </div>

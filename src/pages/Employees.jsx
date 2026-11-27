@@ -72,13 +72,37 @@ export default function Employees(){
     {error&&<div className="form-error" style={{marginBottom:16}}>{error}</div>}
 
     <section className="card employee-directory-card">
-      <div className="employee-filterbar">
-        <label className="search-box"><Search/><input value={f.q} onChange={e=>setF({...f,q:e.target.value,page:1})} placeholder="Tên, mã NV, CCCD, số điện thoại..."/></label>
-        <select value={f.branch_id} onChange={e=>setF({...f,branch_id:e.target.value,page:1})}><option value="">Tất cả chi nhánh</option>{options(look.branches,'branch_name','branch')}</select>
-        <select value={f.department_id} onChange={e=>setF({...f,department_id:e.target.value,page:1})}><option value="">Tất cả phòng ban</option>{options(look.departments,'department_name','department')}</select>
-        <select value={f.position_id} onChange={e=>setF({...f,position_id:e.target.value,page:1})}><option value="">Tất cả chức vụ</option>{options(look.positions,'position_name','position')}</select>
-        <select value={f.status} onChange={e=>setF({...f,status:e.target.value,page:1})}><option value="">Tất cả trạng thái</option><option value="active">Nhân viên chính thức</option><option value="probation">Nhân viên thử việc</option><option value="on_leave">Đang nghỉ phép</option><option value="inactive">Ngưng hoạt động</option></select>
-        <select value={f.doc} onChange={e=>setF({...f,doc:e.target.value,page:1})}><option value="">Tình trạng hồ sơ</option><option value="missing">Còn thiếu hồ sơ số</option><option value="complete">Đã đủ hồ sơ số</option></select>
+      <div className="employee-filter-stack">
+        <div className="employee-search-row">
+          <label className="search-box employee-search-wide">
+            <Search/>
+            <input value={f.q} onChange={e=>setF({...f,q:e.target.value,page:1})} placeholder="Tìm nhanh theo tên nhân viên, mã NV, CCCD, số điện thoại..."/>
+          </label>
+          <div className="employee-quick-pills" role="group" aria-label="Lọc nhanh trạng thái">
+            {[
+              ['','Tất cả'],
+              ['active','Chính thức'],
+              ['probation','Thử việc'],
+              ['on_leave','Nghỉ phép']
+            ].map(([val,lbl])=><button
+              key={val||'all'}
+              type="button"
+              className={`emp-pill ${f.status===val?'active':''}`}
+              onClick={()=>setF({...f,status:val,page:1})}
+            >{lbl}</button>)}
+          </div>
+          {(f.q||f.branch_id||f.department_id||f.position_id||f.status||f.doc)&&<button
+            type="button"
+            className="btn ghost small"
+            onClick={()=>setF({q:'',status:'',branch_id:'',department_id:'',position_id:'',doc:'',page:1,limit:20})}
+          >Xóa lọc</button>}
+        </div>
+        <div className="employee-filter-selects">
+          <select value={f.branch_id} onChange={e=>setF({...f,branch_id:e.target.value,page:1})}><option value="">Tất cả chi nhánh</option>{options(look.branches,'branch_name','branch')}</select>
+          <select value={f.department_id} onChange={e=>setF({...f,department_id:e.target.value,page:1})}><option value="">Tất cả phòng ban</option>{options(look.departments,'department_name','department')}</select>
+          <select value={f.position_id} onChange={e=>setF({...f,position_id:e.target.value,page:1})}><option value="">Tất cả chức vụ</option>{options(look.positions,'position_name','position')}</select>
+          <select value={f.doc} onChange={e=>setF({...f,doc:e.target.value,page:1})}><option value="">Tình trạng hồ sơ</option><option value="missing">Còn thiếu hồ sơ số</option><option value="complete">Đã đủ hồ sơ số</option></select>
+        </div>
       </div>
 
       <div className="card-head employee-table-head"><div><h3>Nhân viên</h3><p>{data.total} hồ sơ phù hợp</p></div><span className="internal-data"><FolderOpen/> Dữ liệu nội bộ</span></div>
@@ -87,16 +111,14 @@ export default function Employees(){
 
       <div className="table-wrap">
         <table className="employee-table employee-table-selectable">
-          <thead><tr>{has('employee.delete')&&<th className="select-col"><input type="checkbox" checked={allVisible} onChange={toggleAll} aria-label="Chọn tất cả trang hiện tại"/></th>}<th>Nhân viên</th><th>Chi nhánh</th><th>Phòng ban</th><th>Chức vụ</th><th>Ngày nhận việc</th><th>HĐ thử việc</th><th>Liên hệ</th><th>Hồ sơ</th><th>Trạng thái</th><th></th></tr></thead>
+          <thead><tr>{has('employee.delete')&&<th className="select-col"><input type="checkbox" checked={allVisible} onChange={toggleAll} aria-label="Chọn tất cả trang hiện tại"/></th>}<th>Nhân viên</th><th>Đơn vị &amp; Chức vụ</th><th>Ngày nhận việc</th><th>Liên hệ</th><th>Hồ sơ</th><th>Trạng thái</th><th className="actions-col"></th></tr></thead>
           <tbody>{rows.map((e,i)=>{const id=entityId(e);return <tr key={entityKey(e,`employee-${i}`)} className={selected.has(String(id))?'row-selected':''}>
             {has('employee.delete')&&<td className="select-col"><input type="checkbox" checked={selected.has(String(id))} onChange={()=>id&&toggle(id)} aria-label={`Chọn ${e.full_name}`}/></td>}
             <td><button className="person-cell person-link" onClick={()=>openEmployee(e)}><span className="mini-avatar">{initials(e.full_name)}</span><span><strong>{e.full_name}</strong><small>{e.employee_code}</small></span></button></td>
-            <td><strong className="cell-main">{e.branch_name||'Chưa phân chi nhánh'}</strong></td>
-            <td><strong className="cell-main">{e.department_name||'Chưa phân phòng ban'}</strong></td>
-            <td>{e.position_name||'—'}</td><td><strong className="cell-main">{fmtDate(e.join_date)}</strong></td>
-            <td><strong className="cell-main">{fmtDate(e.probation_end_date)}</strong><small className="block">{e.probation_end_date?'Theo dõi hạn thử việc':'Chưa nhập ngày hết hạn'}</small></td>
+            <td><strong className="cell-main">{e.position_name||'Chưa có chức vụ'}</strong><small className="block">{[e.branch_name,e.department_name].filter(Boolean).join(' · ')||'Chưa phân đơn vị'}</small></td>
+            <td><strong className="cell-main">{fmtDate(e.join_date)}</strong>{e.probation_end_date&&<small className="block">Hết thử việc: {fmtDate(e.probation_end_date)}</small>}</td>
             <td><strong className="cell-main">{e.phone||'Chưa có SĐT'}</strong><small className="block">{e.email||'Chưa có email'}</small></td>
-            <td><span className="doc-count"><FolderOpen/> {e.document_completed||0}/{e.document_total||0} giấy tờ</span></td><td><Badge value={e.employment_status}/></td>
+            <td><span className="doc-count"><FolderOpen/> {e.document_completed||0}/{e.document_total||0}</span></td><td><Badge value={e.employment_status}/></td>
             <td><div className="row-actions"><button className="icon-button small" title="Xem hồ sơ" onClick={()=>openEmployee(e)}><Eye/></button>{has('employee.update')&&<button className="icon-button small" title="Chỉnh sửa" onClick={()=>id&&nav(`/employees/${encodeURIComponent(id)}/edit`)}><Pencil/></button>}{has('employee.delete')&&<button className="icon-button small danger-icon" title="Xóa nhân viên" onClick={()=>id&&setDeleteDialog({mode:'single',id,name:e.full_name})}><Trash2/></button>}</div></td>
           </tr>})}</tbody>
         </table>

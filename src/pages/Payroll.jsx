@@ -1,5 +1,5 @@
-import {forwardRef,useEffect,useRef,useState} from 'react';
-import {Calculator,CalendarDays,Download,Eye,FileText,Plus,RefreshCw,Save,Settings2,UsersRound,WalletCards,X} from 'lucide-react';
+import {forwardRef,useEffect,useMemo,useRef,useState} from 'react';
+import {Calculator,CalendarDays,Download,Eye,FileText,Plus,RefreshCw,Save,Search,Settings2,UsersRound,WalletCards,X} from 'lucide-react';
 import html2canvas from 'html2canvas';
 import {jsPDF} from 'jspdf';
 import {api} from '../lib/api';
@@ -39,6 +39,8 @@ export default function Payroll(){
   const [editItem,setEditItem]=useState(null);
   const [busy,setBusy]=useState(false);
   const [toast,setToast]=useState(null);
+  const [query,setQuery]=useState('');
+  const [modeFilter,setModeFilter]=useState('all');
 
   const notify=(message,tone='success')=>setToast({message,tone,key:Date.now()});
   useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(null),3600);return()=>clearTimeout(t)},[toast]);
@@ -62,6 +64,19 @@ export default function Payroll(){
 
   const reloadDetail=async()=>{if(!activeId)return;const {detail:r,lookupFailures}=await fetchPayrollDetail(activeId,canViewSensitive);setDetail(r);if(lookupFailures)notify(`Không tải được thông tin bổ sung của ${lookupFailures} nhân viên.`,'error');await loadSummary(false)};
   const periods=summary?.periods||[];
+  const period=detail?.period;
+  const items=detail?.items||[];
+  const filteredItems=useMemo(()=>{
+    const q=query.trim().toLowerCase();
+    return items.filter(item=>{
+      const e=item.employee||{};
+      const isManual=Boolean(item.manual_deductions)||manualDeductionFields(item).length>0;
+      if(modeFilter==='manual'&&!isManual)return false;
+      if(modeFilter==='auto'&&isManual)return false;
+      if(!q)return true;
+      return `${e.full_name||''} ${e.employee_code||''} ${e.position_name||''}`.toLowerCase().includes(q);
+    });
+  },[items,query,modeFilter]);
 
   const saveItem=async(item,patch)=>{
     const id=item.manage_id||item.id;
@@ -104,14 +119,12 @@ export default function Payroll(){
   };
 
   if(!summary)return <Loading/>;
-  const period=detail?.period;
-  const items=detail?.items||[];
   const settingsSnapshot=normalizeSettings(period?.settings_snapshot||period?.payroll_settings_snapshot||detail?.settings_snapshot||detail?.settings);
   const settingVersions=Array.isArray(detail?.settings_versions)?detail.settings_versions:Array.isArray(detail?.settings_history)?detail.settings_history:[];
 
   return <>
     {toast&&<Toast key={toast.key} message={toast.message} tone={toast.tone} onClose={()=>setToast(null)}/>}    
-    <PageHeader eyebrow="TIỀN LƯƠNG" title="Bảng lương & phiếu lương" subtitle="Tự động lấy nhân sự và cấu hình lương, kế toán nhập ngày công rồi hệ thống tính gross, khấu trừ và thực lãnh." actions={<>
+    <PageHeader title="Bảng lương & phiếu lương" subtitle="Tự động lấy nhân sự và cấu hình lương, kế toán nhập ngày công rồi hệ thống tính gross, khấu trừ và thực lãnh." actions={<>
       {(has('payroll.view')||has('payroll.manage'))&&<button className="btn ghost" onClick={()=>setOpenSettings(true)}><Settings2/> Mặc định pháp lý 2026</button>}
       {has('payroll.manage')&&<button className="btn primary" onClick={()=>setOpenPeriod(true)}><Plus/> Tạo kỳ lương</button>}
     </>}/>
@@ -139,12 +152,22 @@ export default function Payroll(){
           {has('payroll.manage')&&<button className="btn primary small" disabled={busy} onClick={recalculate}><RefreshCw/> Tính lại theo quy định</button>}
         </div></div>
 
-        <div className="payroll-policy-note"><Settings2/><span><strong>Khấu trừ tự động:</strong> BHXH {settingsSnapshot.bhxh_employee_rate}% · BHYT {settingsSnapshot.bhyt_employee_rate}% · BHTN {settingsSnapshot.bhtn_employee_rate}% · giảm trừ bản thân {money(settingsSnapshot.personal_deduction)} · người phụ thuộc {money(settingsSnapshot.dependent_deduction)}. Snapshot tham số được lưu theo kỳ lương; các khoản khấu trừ từng nhân viên vẫn có thể điều chỉnh thủ công.</span></div>
+        <div className="payroll-filterbar">
+          <label className="search-box"><Search/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Tìm nhân viên theo tên, mã NV, chức vụ..."/></label>
+          <select value={modeFilter} onChange={e=>setModeFilter(e.target.value)}>
+            <option value="all">Tất cả chế độ khấu trừ ({items.length})</option>
+            <option value="auto">Khấu trừ tự động</option>
+            <option value="manual">Đã chỉnh tay</option>
+          </select>
+          <span className="payroll-filter-count">Hiển thị {filteredItems.length}/{items.length} nhân sự</span>
+        </div>
+
+        <div className="payroll-policy-note"><Settings2/><span><strong>Khấu trừ tự động:</strong> BHXH {settingsSnapshot.bhxh_employee_rate}% · BHYT {settingsSnapshot.bhyt_employee_rate}% · BHTN {settingsSnapshot.bhtn_employee_rate}% · giảm trừ bản thân {money(settingsSnapshot.personal_deduction)} · người phụ thuộc {money(settingsSnapshot.dependent_deduction)}.</span></div>
 
         <div className="table-wrap payroll-table-wrap"><table className="payroll-detail-table">
-          <thead><tr><th>Nhân viên</th><th>Trạng thái</th><th>Chế độ khấu trừ</th><th>Lương chính thức</th><th>Lương thử việc</th><th>Mức áp dụng</th><th>Công chuẩn</th><th>Ngày công</th><th>Lương theo công</th><th>Phụ cấp</th><th>Gross</th><th>BHXH</th><th>BHYT</th><th>BHTN</th><th>TNCN</th><th>Khấu trừ khác</th><th>Thực lãnh</th><th>Phiếu lương</th></tr></thead>
-          <tbody>{items.map(item=><PayrollRow key={item.manage_id||item.id} item={item} canEdit={has('payroll.manage')} canViewSensitive={canViewSensitive} localPatch={patch=>localPatch(item,patch)} save={patch=>saveItem(item,patch)} openPayslip={()=>openPayslip(item)} openEditor={()=>setEditItem(item)}/>)}</tbody>
-        </table>{!items.length&&<Empty title="Kỳ lương chưa có nhân viên" detail="Bấm Đồng bộ nhân sự để nạp danh sách hiện tại."/>}</div>
+          <thead><tr><th>Nhân viên</th><th>Lương áp dụng</th><th>Ngày công</th><th>Thu nhập (Gross)</th><th>Khấu trừ</th><th>Thực lãnh</th><th className="actions-col">Thao tác</th></tr></thead>
+          <tbody>{filteredItems.map(item=><PayrollRow key={item.manage_id||item.id} item={item} canEdit={has('payroll.manage')} canViewSensitive={canViewSensitive} localPatch={patch=>localPatch(item,patch)} save={patch=>saveItem(item,patch)} openPayslip={()=>openPayslip(item)} openEditor={()=>setEditItem(item)}/>)}</tbody>
+        </table>{!filteredItems.length&&<Empty title={items.length?'Không tìm thấy nhân viên phù hợp':'Kỳ lương chưa có nhân viên'} detail={items.length?'Thử xóa từ khóa tìm kiếm hoặc đổi bộ lọc.':'Bấm Đồng bộ nhân sự để nạp danh sách hiện tại.'}/>}</div>
       </section>
     </>}
 
@@ -164,19 +187,22 @@ function PayrollRow({item,canEdit,canViewSensitive,localPatch,save,openPayslip,o
   const isManual=Boolean(item.manual_deductions)||manualFields.length>0;
   const num=(field,value)=>{localPatch({[field]:value});};
   const commit=(field,value)=>save({[field]:Number(value)||0});
+  const totalInsurance=(Number(item.social_insurance_employee)||0)+(Number(item.health_insurance_employee)||0)+(Number(item.unemployment_insurance_employee)||0);
   return <tr className={isManual?'manual-deduction-row':''}>
-    <td className="payroll-person"><strong>{e.full_name||`NV #${item.employee_id}`}</strong><small>{e.employee_code||''}{age!==null?` · ${age} tuổi`:''}</small><small>{e.position_name||'Chưa có chức vụ'}</small></td>
-    <td><Badge value={e.employment_status}/></td>
-    <td><span className={`payroll-mode-badge ${isManual?'manual':'automatic'}`}>{isManual?'Thủ công':'Tự động'}</span></td>
-    <td className="money-cell">{money(item.base_salary)}</td><td className="money-cell">{money(item.probation_salary)}</td><td className="money-cell applied"><strong>{money(item.applied_salary)}</strong></td>
-    <td className="center-cell">{item.standard_work_days}</td>
-    <td>{canEdit?<input className="payroll-number days" type="number" min="0" step="0.5" value={item.actual_work_days??0} onChange={e=>num('actual_work_days',e.target.value)} onBlur={e=>commit('actual_work_days',e.target.value)}/>:item.actual_work_days}</td>
-    <td className="money-cell">{money(item.salary_by_work_days)}</td><td className="money-cell">{money(item.allowance_total)}</td><td className="money-cell gross"><strong>{money(item.gross_salary)}</strong></td>
-    {DEDUCTION_FIELDS.map(field=><td key={field} className={manualFields.includes(field)?'manual-deduction-cell':''}>{canEdit
-      ?<PayrollDeductionInput item={item} field={field} manuallyEdited={manualFields.includes(field)} save={save}/>
-      :money(item[field])}</td>)}
-    <td className="money-cell net"><strong>{money(item.net_salary)}</strong>{item.manual_deductions&&<small>Đã chỉnh tay</small>}</td>
-    <td><div className="row-actions">{canEdit&&<button type="button" className="icon-button small" title="Chỉnh chi tiết lương, OT, thưởng" aria-label="Chỉnh chi tiết lương, OT, thưởng" onClick={openEditor}><Calculator/></button>}<button type="button" className="icon-button small" title="Xem trước phiếu lương" aria-label="Xem trước phiếu lương" onClick={openPayslip}><Eye/></button><button type="button" className="icon-button small" title="Mở phiếu lương để tải PDF" aria-label="Mở phiếu lương để tải PDF" onClick={openPayslip}><Download/></button>{canEdit&&isManual&&<button type="button" className="btn ghost small payroll-reset-button" title="Khôi phục các khoản khấu trừ tự động" onClick={()=>save({force_auto:true,manual_deductions:false})}><RefreshCw/> Khôi phục tự động</button>}</div></td>
+    <td className="payroll-person">
+      <strong>{e.full_name||`NV #${item.employee_id}`}</strong>
+      <small>{e.employee_code||''}{age!==null?` · ${age} tuổi`:''}{e.position_name?` · ${e.position_name}`:''}</small>
+      <div className="payroll-row-badges"><Badge value={e.employment_status}/><span className={`payroll-mode-badge ${isManual?'manual':'automatic'}`}>{isManual?'Chỉnh tay':'Tự động'}</span></div>
+    </td>
+    <td className="money-cell applied"><strong>{money(item.applied_salary)}</strong><small className="block">{e.employment_status==='probation'?`Thử việc · Chính thức: ${money(item.base_salary)}`:'Lương chính thức'}</small></td>
+    <td className="payroll-days-cell">{canEdit?<div className="payroll-days-inline"><input className="payroll-number days" type="number" min="0" step="0.5" value={item.actual_work_days??0} onChange={e=>num('actual_work_days',e.target.value)} onBlur={e=>commit('actual_work_days',e.target.value)}/><span>/ {item.standard_work_days||26}</span></div>:<span>{item.actual_work_days} / {item.standard_work_days||26}</span>}</td>
+    <td className="money-cell gross"><strong>{money(item.gross_salary)}</strong><small className="block">Công: {money(item.salary_by_work_days)} · PC: {money(item.allowance_total)}</small></td>
+    <td className="money-cell">
+      <strong>{money(item.total_deduction)}</strong>
+      <small className="block">BH: {money(totalInsurance)} · TNCN: {money(item.personal_income_tax)}</small>
+    </td>
+    <td className="money-cell net"><strong>{money(item.net_salary)}</strong></td>
+    <td><div className="row-actions">{canEdit&&<button type="button" className="icon-button small" title="Chỉnh chi tiết lương, khấu trừ, OT, thưởng" aria-label="Chỉnh chi tiết lương, khấu trừ, OT, thưởng" onClick={openEditor}><Calculator/></button>}<button type="button" className="icon-button small" title="Xem phiếu lương & tải PDF" aria-label="Xem phiếu lương & tải PDF" onClick={openPayslip}><Eye/></button>{canEdit&&isManual&&<button type="button" className="icon-button small" title="Khôi phục tự động" aria-label="Khôi phục tự động" onClick={()=>save({force_auto:true,manual_deductions:false})}><RefreshCw/></button>}</div></td>
   </tr>;
 }
 
@@ -331,27 +357,62 @@ function PayrollItemForm({item,done,onCancel}){
     if(totalDeduction>gross){setError(`Tổng khấu trừ (${money(totalDeduction)}) không được vượt Gross (${money(gross)}).`);return}
     setError('');setBusy(true);try{await done(f)}finally{setBusy(false)}
   };
+  const standardDays=Math.max(1,Number(item.standard_work_days)||26);
+  const salaryByDays=Math.round((Number(item.applied_salary)||0)*(Number(f.actual_work_days)||0)/standardDays);
+  const previewGross=salaryByDays+(Number(f.allowance_total)||0)+(Number(f.overtime_pay)||0)+(Number(f.bonus)||0)+(Number(f.other_income)||0);
+  const previewDeduction=DEDUCTION_FIELDS.reduce((sum,key)=>sum+(Number(f[key])||0),0);
+  const previewNet=Math.max(0,previewGross-previewDeduction);
+
   return <form className="form-stack payroll-item-editor" onSubmit={submit}>
     {error&&<div className="form-error" role="alert">{error}</div>}
-    <div className="payroll-editor-banner"><Calculator/><span><strong>{item.employee?.full_name||`NV #${item.employee_id}`}</strong><small>Lương chính thức {money(item.base_salary)} · thử việc {money(item.probation_salary)} · mức đang áp dụng {money(item.applied_salary)}</small></span></div>
-    <div className="three-col">
-      <label>Ngày công thực tế<input type="number" min="0" step="0.5" value={f.actual_work_days} onChange={e=>set('actual_work_days',e.target.value)}/></label>
-      <label>Phụ cấp kỳ này<input type="number" min="0" step="1000" value={f.allowance_total} onChange={e=>set('allowance_total',e.target.value)}/></label>
-      <label>Số người phụ thuộc<input type="number" min="0" step="1" value={f.tax_dependents} onChange={e=>set('tax_dependents',e.target.value)}/></label>
-      <label>Giờ ngoài giờ<input type="number" min="0" step="0.5" value={f.overtime_hours} onChange={e=>set('overtime_hours',e.target.value)}/></label>
-      <label>Tiền ngoài giờ<input type="number" min="0" step="1000" value={f.overtime_pay} onChange={e=>set('overtime_pay',e.target.value)}/></label>
-      <label>Thưởng<input type="number" min="0" step="1000" value={f.bonus} onChange={e=>set('bonus',e.target.value)}/></label>
-      <label>Thu nhập khác<input type="number" min="0" step="1000" value={f.other_income} onChange={e=>set('other_income',e.target.value)}/></label>
+    <div className="pe-header-card">
+      <div className="pe-emp">
+        <span className="pe-avatar"><Calculator size={18}/></span>
+        <div>
+          <strong>{item.employee?.full_name||`NV #${item.employee_id}`}</strong>
+          <small>{item.employee?.employee_code||''} · Mức áp dụng: {money(item.applied_salary)} / {standardDays} công</small>
+        </div>
+      </div>
+      <div className="pe-live-kpis">
+        <div><small>Gross tạm tính</small><strong>{money(previewGross)}</strong></div>
+        <div><small>Tổng khấu trừ</small><strong className="ded">{money(previewDeduction)}</strong></div>
+        <div className="net-pill"><small>Thực lãnh tạm tính</small><strong>{money(previewNet)}</strong></div>
+      </div>
     </div>
-    <div className="payroll-editor-section"><strong>Khấu trừ — được phép chỉnh tay</strong><small>Nếu thay đổi các ô dưới đây, dòng lương sẽ chuyển sang chế độ khấu trừ thủ công cho đến khi bấm “Tính lại theo quy định”.</small></div>
-    <div className="three-col">
-      <label>BHXH<FormattedMoneyInput value={f.social_insurance_employee} onChange={v=>setDeduction('social_insurance_employee',v)} onNegative={()=>setError('Không cho phép số âm.')}/></label>
-      <label>BHYT<FormattedMoneyInput value={f.health_insurance_employee} onChange={v=>setDeduction('health_insurance_employee',v)} onNegative={()=>setError('Không cho phép số âm.')}/></label>
-      <label>BHTN<FormattedMoneyInput value={f.unemployment_insurance_employee} onChange={v=>setDeduction('unemployment_insurance_employee',v)} onNegative={()=>setError('Không cho phép số âm.')}/></label>
-      <label>Thuế TNCN<FormattedMoneyInput value={f.personal_income_tax} onChange={v=>setDeduction('personal_income_tax',v)} onNegative={()=>setError('Không cho phép số âm.')}/></label>
-      <label>Khấu trừ khác<FormattedMoneyInput value={f.other_deduction} onChange={v=>setDeduction('other_deduction',v)} onNegative={()=>setError('Không cho phép số âm.')}/></label>
+
+    <div className="pe-grid">
+      <section className="pe-section">
+        <div className="pe-section-head">
+          <h4>Công &amp; Thu nhập</h4>
+          <small>Lương theo công tạm tính: {money(salaryByDays)}</small>
+        </div>
+        <div className="pe-fields-grid">
+          <label>Ngày công thực tế<input type="number" min="0" step="0.5" value={f.actual_work_days} onChange={e=>set('actual_work_days',e.target.value)}/></label>
+          <label>Phụ cấp kỳ này<FormattedMoneyInput value={f.allowance_total} onChange={v=>set('allowance_total',v)} onNegative={()=>setError('Không cho phép số âm.')}/></label>
+          <label>Số người phụ thuộc<input type="number" min="0" step="1" value={f.tax_dependents} onChange={e=>set('tax_dependents',e.target.value)}/></label>
+          <label>Giờ tăng ca (OT)<input type="number" min="0" step="0.5" value={f.overtime_hours} onChange={e=>set('overtime_hours',e.target.value)}/></label>
+          <label>Tiền tăng ca (OT)<FormattedMoneyInput value={f.overtime_pay} onChange={v=>set('overtime_pay',v)} onNegative={()=>setError('Không cho phép số âm.')}/></label>
+          <label>Thưởng<FormattedMoneyInput value={f.bonus} onChange={v=>set('bonus',v)} onNegative={()=>setError('Không cho phép số âm.')}/></label>
+          <label>Thu nhập khác<FormattedMoneyInput value={f.other_income} onChange={v=>set('other_income',v)} onNegative={()=>setError('Không cho phép số âm.')}/></label>
+        </div>
+      </section>
+
+      <section className="pe-section">
+        <div className="pe-section-head">
+          <h4>Khấu trừ (Chỉnh tay)</h4>
+          <small>Chuyển sang thủ công khi sửa trực tiếp</small>
+        </div>
+        <div className="pe-fields-grid">
+          <label>BHXH<FormattedMoneyInput value={f.social_insurance_employee} onChange={v=>setDeduction('social_insurance_employee',v)} onNegative={()=>setError('Không cho phép số âm.')}/></label>
+          <label>BHYT<FormattedMoneyInput value={f.health_insurance_employee} onChange={v=>setDeduction('health_insurance_employee',v)} onNegative={()=>setError('Không cho phép số âm.')}/></label>
+          <label>BHTN<FormattedMoneyInput value={f.unemployment_insurance_employee} onChange={v=>setDeduction('unemployment_insurance_employee',v)} onNegative={()=>setError('Không cho phép số âm.')}/></label>
+          <label>Thuế TNCN<FormattedMoneyInput value={f.personal_income_tax} onChange={v=>setDeduction('personal_income_tax',v)} onNegative={()=>setError('Không cho phép số âm.')}/></label>
+          <label>Khấu trừ khác<FormattedMoneyInput value={f.other_deduction} onChange={v=>setDeduction('other_deduction',v)} onNegative={()=>setError('Không cho phép số âm.')}/></label>
+        </div>
+      </section>
     </div>
-    <label>Ghi chú<textarea rows="3" value={f.note} onChange={e=>set('note',e.target.value)} placeholder="Ghi chú kỳ lương, truy thu, nghỉ không lương..."/></label>
+
+    <label className="pe-note-field"><span>Ghi chú kỳ lương</span><textarea rows="2" value={f.note} onChange={e=>set('note',e.target.value)} placeholder="Ghi chú kỳ lương, truy thu, nghỉ không lương..."/></label>
     <div className="modal-actions"><button type="button" className="btn ghost" onClick={onCancel} disabled={busy}>Hủy</button><button className="btn primary" disabled={busy}><Save/> {busy?'Đang lưu...':'Lưu & tính lại'}</button></div>
   </form>;
 }

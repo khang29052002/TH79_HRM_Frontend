@@ -1,6 +1,6 @@
 ﻿# =====================================================
 # TH79 HRM Frontend - CI Pipeline
-# Build & validate on every push/PR to main and develop
+# Chạy trên mọi push/PR vào develop và main
 # =====================================================
 name: CI - Build & Validate
 
@@ -12,20 +12,17 @@ on:
 
 jobs:
   build:
-    name: "Build (Node ${{ matrix.node-version }})"
+    name: Build (${{ github.ref_name }})
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [20, 22]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 20
           cache: npm
 
       - name: Install dependencies
@@ -34,20 +31,20 @@ jobs:
       - name: Build production bundle
         run: npm run build
         env:
-          VITE_API_URL: https://api.hrm.daututh79.com
+          # Develop branch build dùng API staging, main dùng production
+          VITE_API_URL: ${{ github.ref_name == 'main' && secrets.VITE_API_URL_PROD || secrets.VITE_API_URL_STAGING }}
 
       - name: Check bundle size
         run: |
-          echo "=== Build Output ==="
+          echo "=== Build Output Size ==="
           du -sh dist/
           echo ""
-          echo "=== Top 15 largest files ==="
-          find dist/ -type f -exec du -h {} + | sort -rh | head -15
+          echo "=== Largest files (top 10) ==="
+          find dist/ -type f -exec du -h {} + | sort -rh | head -10
 
       - name: Upload build artifact
-        if: matrix.node-version == 20
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-dist
+          name: frontend-dist-${{ github.ref_name }}-${{ github.sha }}
           path: dist/
-          retention-days: 7
+          retention-days: 3

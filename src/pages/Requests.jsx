@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CalendarOff, Check, Clock3, ShieldCheck, X } from 'lucide-react';
+import { CalendarOff, Check, Clock3, ShieldCheck, Trash2, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { Badge, Empty, Loading, PageHeader, Toast } from '../components/ui';
 import { fmtDate } from '../lib/format';
@@ -53,6 +53,15 @@ export default function Requests() {
     await load();
   };
 
+  const deleteLeave = async r => {
+    if (!window.confirm(`Xóa đơn ${r.leave_name} của ${r.employee_name || 'nhân viên'}?`)) return;
+    try {
+      await api(`/leave/requests/${r.id}`, { method: 'DELETE' });
+      notify('Đã xóa đơn nghỉ phép / OT.');
+      await load();
+    } catch (e) { notify(e.message, 'error'); }
+  };
+
   const pPending = profileReqs.filter(x => x.status === 'pending').length;
   const lPending = leaveReqs.filter(x => x.status === 'pending').length;
   const aPending = adjReqs.filter(x => x.status === 'pending').length;
@@ -60,7 +69,6 @@ export default function Requests() {
   return <>
     {toast && <Toast key={toast.key} message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />}
     <PageHeader
-      eyebrow="APPROVAL CENTER"
       title="Trung tâm duyệt yêu cầu nhân viên"
       subtitle="Phê duyệt yêu cầu cập nhật hồ sơ, đơn nghỉ phép / tăng ca (OT) và đơn giải trình chấm công."
     />
@@ -102,19 +110,27 @@ export default function Requests() {
     {tab === 'leave' && <section className="card">
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Nhân viên</th><th>Loại đơn</th><th>Thời gian</th><th>Số ngày / Giờ</th><th>Lý do</th><th>Trạng thái</th><th></th></tr></thead>
+          <thead><tr><th>Nhân viên</th><th>Loại đơn</th><th>Thời gian</th><th>Số ngày / Giờ</th><th>Lý do</th><th>Trạng thái</th><th className="actions-col">Thao tác</th></tr></thead>
           <tbody>
             {leaveReqs.map(r => <tr key={r.id}>
               <td><strong>{r.employee_name}</strong><small className="block">{r.employee_code}</small></td>
-              <td>{r.leave_name}</td>
+              <td>
+                <strong>{r.leave_name}</strong>
+                <small className="block">{r.request_kind === 'overtime' ? 'Tăng ca OT' : (Number(r.is_paid) === 1 ? 'Nghỉ có phép (hưởng lương)' : 'Nghỉ không lương')}</small>
+              </td>
               <td>{fmtDate(r.start_date)}{r.end_date && r.end_date !== r.start_date ? ` → ${fmtDate(r.end_date)}` : ''}</td>
               <td><strong>{r.request_kind === 'overtime' ? `${r.hours} giờ` : `${r.total_days} ngày`}</strong></td>
               <td>{r.reason}</td>
               <td><Badge value={r.status} /></td>
-              <td>{r.status === 'pending' && <div className="inline-actions">
-                <button className="icon-btn success" onClick={() => reviewLeave(r.id, 'approved')}><Check size={17} /></button>
-                <button className="icon-btn danger" onClick={() => reviewLeave(r.id, 'rejected')}><X size={17} /></button>
-              </div>}</td>
+              <td>
+                <div className="row-actions">
+                  {r.status === 'pending' && <>
+                    <button type="button" className="icon-btn success" title="Duyệt đơn" onClick={() => reviewLeave(r.id, 'approved')}><Check size={16} /></button>
+                    <button type="button" className="icon-btn danger" title="Từ chối đơn" onClick={() => reviewLeave(r.id, 'rejected')}><X size={16} /></button>
+                  </>}
+                  <button type="button" className="icon-button small danger-icon" title="Xóa đơn" onClick={() => deleteLeave(r)}><Trash2 size={15} /></button>
+                </div>
+              </td>
             </tr>)}
           </tbody>
         </table>

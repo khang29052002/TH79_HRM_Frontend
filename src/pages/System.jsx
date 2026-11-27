@@ -6,13 +6,19 @@ import {
 import {api} from '../lib/api';
 import {Loading,PageHeader,Modal} from '../components/ui';
 import {useAuth} from '../hooks/useAuth';
-import {useNavigate} from 'react-router-dom';
+import {useNavigate,useSearchParams} from 'react-router-dom';
 
 export default function System(){
   const {has,user}=useAuth();
   const nav=useNavigate();
+  const [searchParams]=useSearchParams();
   const [org,setOrg]=useState(null),[users,setUsers]=useState(null),[roles,setRoles]=useState(null),[activity,setActivity]=useState(null);
-  const [tab,setTab]=useState('overview'),[open,setOpen]=useState(null),[feedback,setFeedback]=useState(null);
+  const [tab,setTab]=useState(searchParams.get('tab')||'overview'),[open,setOpen]=useState(null),[feedback,setFeedback]=useState(null);
+
+  useEffect(()=>{
+    const qTab=searchParams.get('tab');
+    setTab(qTab||'overview');
+  },[searchParams]);
 
   const load=()=>{
     has('organization.view')&&api('/system/organization').then(setOrg);
@@ -37,11 +43,7 @@ export default function System(){
   if(!org&&!users&&!roles&&!activity)return <Loading/>;
 
   return <>
-    <PageHeader eyebrow="HỆ THỐNG" title="Cấu hình & phân quyền" subtitle="Quản lý cơ cấu tổ chức, tài khoản đăng nhập, vai trò và lịch sử thao tác." actions={<>
-      {has('employee.import')&&<button className="btn ghost" onClick={()=>nav('/employees/import')}>Cập nhật Excel</button>}
-      {has('employee.create')&&<button className="btn primary" onClick={()=>nav('/employees/new')}>Thêm nhân viên</button>}
-      {has('audit.view')&&<button className="btn ghost" onClick={()=>nav('/activity')}><History/> Lịch sử hoạt động</button>}
-    </>}/>
+    <PageHeader title="Cấu hình & phân quyền" subtitle="Quản lý cơ cấu tổ chức, tài khoản đăng nhập, vai trò và lịch sử thao tác."/>
 
     {feedback&&<div className={`system-feedback ${feedback.type||'success'}`}><span>{feedback.message}</span><button onClick={()=>setFeedback(null)} aria-label="Đóng"><X/></button></div>}
 

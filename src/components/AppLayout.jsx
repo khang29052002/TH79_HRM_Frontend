@@ -33,12 +33,12 @@ export default function AppLayout(){
   if(!user) return <Navigate to="/login" replace/>;
   if(user.must_change_password&&location.pathname!=='/change-password') return <Navigate to="/change-password" replace/>;
 
-  return <div className="app-shell php-ui-shell">
-    <Sidebar mobileOpen={mobileNavOpen} onMobileClose={()=>setMobileNavOpen(false)}/>
-    {mobileNavOpen&&<button className="sidebar-backdrop" aria-label="Đóng menu" onClick={()=>setMobileNavOpen(false)}/>}    
-    <main className="main-area">
+  return <div className="app-shell php-ui-shell base-ui-shell">
+    <Sidebar mobileOpen={mobileNavOpen} onMobileClose={()=>setMobileNavOpen(false)} onCommand={()=>setCommandOpen(true)}/>
+    {mobileNavOpen&&<button className="sidebar-backdrop" aria-label="Đóng menu" onClick={()=>setMobileNavOpen(false)}/>}
+    <main className="main-area base-main-area">
       <Header onCommand={()=>setCommandOpen(true)} onMenu={()=>setMobileNavOpen(true)}/>
-      <div className="page-wrap"><Outlet/></div>
+      <div className="page-wrap base-page-wrap"><Outlet/></div>
     </main>
     <CommandPalette open={commandOpen} onClose={()=>setCommandOpen(false)}/>
     <Copilot/>

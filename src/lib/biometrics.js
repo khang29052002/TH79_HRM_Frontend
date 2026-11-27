@@ -236,6 +236,7 @@ export function methodLabel(method) {
     device: 'Máy chấm công',
     fingerprint: 'Dấu vân tay',
     manual: 'HR nhập tay',
-    adjustment: 'Giải trình'
+    adjustment: 'Giải trình',
+    leave: 'Đơn nghỉ phép'
   }[method] || method || '—');
 }

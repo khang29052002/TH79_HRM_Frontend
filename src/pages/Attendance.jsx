@@ -33,6 +33,8 @@ export default function Attendance() {
   const [year, setYear] = useState(now.getFullYear());
   const [tsFilter, setTsFilter] = useState({ branch_id: '', department_id: '', q: '' });
   const [timesheet, setTimesheet] = useState(null);
+  const [tsView, setTsView] = useState('summary');
+  const [tsDetailRow, setTsDetailRow] = useState(null);
 
   // Shifts & Holidays
   const [holidays, setHolidays] = useState([]);
@@ -129,7 +131,6 @@ export default function Attendance() {
     {toast && <Toast key={toast.key} message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />}
 
     <PageHeader
-      eyebrow="CHẤM CÔNG & SINH TRẮC HỌC"
       title="Chấm công thông minh đa phương thức"
       subtitle="Quét khuôn mặt, quét bảng tên QR/Barcode, dấu vân tay, bảng công tháng và đồng bộ tiền lương."
       actions={<>
@@ -226,6 +227,10 @@ export default function Attendance() {
           <p>Công chuẩn tham chiếu: {timesheet?.standardWorkDays || 26} ngày · Tổng hợp công thực tế, phép năm hưởng lương, nghỉ lễ và tăng ca</p>
         </div>
         <div className="page-actions">
+          <div className="ts-view-switch" role="group" aria-label="Chế độ xem bảng công">
+            <button type="button" className={tsView === 'summary' ? 'active' : ''} onClick={() => setTsView('summary')}>Tổng hợp gọn</button>
+            <button type="button" className={tsView === 'matrix' ? 'active' : ''} onClick={() => setTsView('matrix')}>Bảng 31 ngày</button>
+          </div>
           <a className="btn ghost small" href={apiUrl(`/attendance/timesheet/export${qs({ month, year, ...tsFilter })}`)}>
             <Download size={15} /> Xuất Excel
           </a>
@@ -255,7 +260,51 @@ export default function Attendance() {
         </select>
       </div>
 
-      {!timesheet ? <Loading /> : <div className="table-wrap">
+      {!timesheet ? <Loading /> : tsView === 'summary' ? <div className="table-wrap">
+        <table className="ts-summary-table">
+          <thead>
+            <tr>
+              <th>Nhân viên</th>
+              <th>Công làm</th>
+              <th>Nghỉ phép / Lễ</th>
+              <th>Đi muộn</th>
+              <th>OT (giờ)</th>
+              <th>Tổng công tính lương</th>
+              <th className="actions-col"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {timesheet.items.map(row => {
+              const std = timesheet.standardWorkDays || 26;
+              const pct = Math.min(100, Math.round(((Number(row.payable_work_days) || 0) / std) * 100));
+              return <tr key={row.employee_id}>
+                <td>
+                  <button type="button" className="person-cell person-link" onClick={() => setTsDetailRow(row)}>
+                    <span className="mini-avatar">{initials(row.full_name)}</span>
+                    <span><strong>{row.full_name}</strong><small>{row.employee_code} · {row.branch_name || 'Chưa phân chi nhánh'}</small></span>
+                  </button>
+                </td>
+                <td><strong>{row.present_days}</strong> <span className="muted-inline">ngày</span></td>
+                <td>Phép: <strong>{row.paid_leave_days}</strong>{row.unpaid_leave_days > 0 ? <> · Không lương: <strong>{row.unpaid_leave_days}</strong></> : null} · Lễ: <strong>{row.holiday_days}</strong></td>
+                <td>{row.late_count > 0 ? <span className="badge warning">{row.late_count} lần</span> : <span className="badge success">Đúng giờ</span>}</td>
+                <td>{row.overtime_hours > 0 ? <strong>{row.overtime_hours}h</strong> : '0h'}</td>
+                <td>
+                  <div className="ts-progress-cell">
+                    <div><strong>{row.payable_work_days}</strong> / {std} ngày</div>
+                    <div className="ts-progress-bar"><span style={{ width: `${pct}%` }} /></div>
+                  </div>
+                </td>
+                <td>
+                  <button type="button" className="btn ghost small" onClick={() => setTsDetailRow(row)}>
+                    <CalendarDays size={14} /> Xem lịch công
+                  </button>
+                </td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+        {!timesheet.items.length && <Empty title="Không có dữ liệu bảng công" />}
+      </div> : <div className="table-wrap">
         <table className="timesheet-table">
           <thead>
             <tr>
@@ -268,7 +317,7 @@ export default function Attendance() {
               <th>Lễ</th>
               <th>Muộn</th>
               <th>OT (h)</th>
-              <th>Tổng công</th>
+              <th className="sticky-right">Tổng công</th>
             </tr>
           </thead>
           <tbody>
@@ -298,7 +347,7 @@ export default function Attendance() {
               <td className="center-cell">{row.holiday_days}</td>
               <td className="center-cell">{row.late_count}</td>
               <td className="center-cell">{row.overtime_hours}</td>
-              <td className="center-cell"><strong>{row.payable_work_days}</strong></td>
+              <td className="center-cell sticky-right"><strong>{row.payable_work_days}</strong></td>
             </tr>)}
           </tbody>
         </table>
@@ -307,12 +356,12 @@ export default function Attendance() {
     </section>}
 
     {tab === 'biometrics' && <section className="card">
-      <div className="card-head">
+      <div className="card-head bio-card-head">
         <div>
           <h3>Hồ sơ sinh trắc học & Bảng tên nhân viên</h3>
           <p>Đăng ký khuôn mặt bằng mô hình mới, cấp bảng tên QR và đăng ký dấu vân tay. Mẫu khuôn mặt cũ cần đăng ký lại.</p>
         </div>
-        <div className="search-box" style={{ minWidth: 280 }}>
+        <div className="search-box bio-search-box">
           <Search size={16} />
           <input value={bioQuery} onChange={e => setBioQuery(e.target.value)} placeholder="Tìm nhân viên..." />
         </div>
@@ -450,7 +499,66 @@ export default function Attendance() {
     <Modal open={manualModal} onClose={() => setManualModal(false)} title="Chấm công / Bổ sung công thủ công">
       <ManualRecordForm employees={biometrics} shifts={overview.shifts || []} done={async () => { setManualModal(false); notify('Đã cập nhật dữ liệu chấm công.'); await loadCore(); }} />
     </Modal>
+
+    <Modal open={Boolean(tsDetailRow)} onClose={() => setTsDetailRow(null)} title={`Lịch chấm công tháng ${String(month).padStart(2, '0')}/${year} — ${tsDetailRow?.full_name || ''}`} wide>
+      {tsDetailRow && timesheet && <TimesheetCalendarModal row={tsDetailRow} month={month} year={year} daysInMonth={timesheet.daysInMonth} standardWorkDays={timesheet.standardWorkDays || 26} />}
+    </Modal>
   </>;
+}
+
+function TimesheetCalendarModal({ row, month, year, daysInMonth, standardWorkDays }) {
+  const firstWeekday = (new Date(year, month - 1, 1).getDay() + 6) % 7; // 0 = Mon
+  const cells = [];
+  for (let i = 0; i < firstWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  return <div className="ts-cal-wrap">
+    <div className="ts-cal-summary">
+      <span>Công làm: <strong>{row.present_days}</strong></span>
+      <span>Nghỉ có phép: <strong>{row.paid_leave_days}</strong></span>
+      {row.unpaid_leave_days > 0 && <span>Nghỉ không lương: <strong>{row.unpaid_leave_days}</strong></span>}
+      <span>Nghỉ lễ: <strong>{row.holiday_days}</strong></span>
+      <span>Đi muộn: <strong>{row.late_count} lần</strong></span>
+      <span>OT: <strong>{row.overtime_hours}h</strong></span>
+      <span>Tổng tính lương: <strong>{row.payable_work_days}/{standardWorkDays} ngày</strong></span>
+    </div>
+
+    <div className="ts-cal-weekdays">
+      {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(w => <div key={w}>{w}</div>)}
+    </div>
+
+    <div className="ts-cal-grid">
+      {cells.map((d, idx) => {
+        if (!d) return <div key={`empty-${idx}`} className="ts-cal-day empty" />;
+        const c = row.days?.[d] || {};
+        const cls = c.type === 'weekend' ? 'ts-wk'
+          : c.type === 'holiday' ? 'ts-hol'
+          : c.type === 'paid_leave' ? 'ts-leave'
+          : c.type === 'unpaid_leave' ? 'ts-unpaid'
+          : c.type === 'late' || c.type === 'late_and_early' ? 'ts-late'
+          : c.type === 'present' || c.type === 'early_leave' ? 'ts-ok'
+          : 'ts-empty';
+        const statusText = c.type === 'weekend' ? 'Cuối tuần'
+          : c.type === 'holiday' ? 'Nghỉ lễ'
+          : c.type === 'paid_leave' ? (c.label || 'Nghỉ có phép')
+          : c.type === 'unpaid_leave' ? (c.label || 'Nghỉ không lương')
+          : c.check_in ? `${c.check_in} - ${c.check_out || '?'}`
+          : (c.label || 'Chưa có công');
+        return <div key={d} className={`ts-cal-day ${cls}`}>
+          <div className="ts-cal-num">{d}{c.unit ? <em>{c.unit} công</em> : c.type === 'unpaid_leave' ? <em>0 công</em> : null}</div>
+          <small>{statusText}</small>
+        </div>;
+      })}
+    </div>
+
+    <div className="ts-cal-legend">
+      <span><i className="ts-ok" /> Đúng giờ</span>
+      <span><i className="ts-late" /> Đi muộn / về sớm</span>
+      <span><i className="ts-leave" /> Nghỉ phép</span>
+      <span><i className="ts-hol" /> Nghỉ lễ</span>
+      <span><i className="ts-wk" /> Cuối tuần</span>
+    </div>
+  </div>;
 }
 
 function EnrollmentDialog({ emp, mode, canManage, onDone }) {
@@ -634,7 +742,7 @@ function ShiftForm({ done }) {
     if(Boolean(f.break_start)!==Boolean(f.break_end)){setErr('Cần nhập cả giờ bắt đầu và kết thúc nghỉ giữa ca.');return}
     if(f.break_start&&(!isValidTime(f.break_start)||!isValidTime(f.break_end))){setErr('Giờ nghỉ giữa ca không hợp lệ.');return}
     if(!isValidNumber(f.work_hours,{min:0.5,max:24})||Number(f.work_hours)*2%1!==0){setErr('Số giờ công phải từ 0,5 đến 24 và theo bước 0,5 giờ.');return}
-    if(!isValidNumber(f.grace_minutes,{min:0,max:180,integer:true})){setErr('Thời gian cho phép đi muộn phải từ 0 đến 180 phút.');return}
+    if(!isValidNumber(f.grace_minutes,{min:0,max:10,integer:true})){setErr('Thời gian cho phép đi muộn tối đa 10 phút (0–10 phút).');return}
     if(!isValidNumber(f.overtime_multiplier,{min:1,max:5})){setErr('Hệ số OT phải từ 1 đến 5.');return}
     try { await api('/attendance/shifts', { method: 'POST', body: JSON.stringify(f) }); done(); }
     catch (ex) { setErr(ex.message); }
@@ -651,7 +759,7 @@ function ShiftForm({ done }) {
     </div>
     <div className="three-col">
       <label>Số giờ công<input type="number" min="0.5" max="24" step="0.5" value={f.work_hours} onChange={e => setF({ ...f, work_hours: e.target.value })} /></label>
-      <label>Cho phép muộn (p)<input type="number" min="0" max="180" step="1" value={f.grace_minutes} onChange={e => setF({ ...f, grace_minutes: e.target.value })} /></label>
+      <label>Cho phép muộn (tối đa 10p)<input type="number" min="0" max="10" step="1" value={f.grace_minutes} onChange={e => setF({ ...f, grace_minutes: e.target.value })} /></label>
       <label>Hệ số OT<input type="number" min="1" max="5" step="0.1" value={f.overtime_multiplier} onChange={e => setF({ ...f, overtime_multiplier: e.target.value })} /></label>
     </div>
     <label className="inline-toggle"><input type="checkbox" checked={f.is_default} onChange={e => setF({ ...f, is_default: e.target.checked })} /><span>Đặt làm ca mặc định</span></label>

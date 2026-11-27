@@ -1,0 +1,52 @@
+﻿# =====================================================
+# TH79 HRM Frontend - Auto PR: develop → main
+# Tự động tạo PR sau khi staging deploy thành công
+# =====================================================
+name: Create PR develop → main
+
+on:
+  workflow_run:
+    workflows: ["CD - Deploy to Vercel"]
+    branches: [develop]
+    types: [completed]
+
+jobs:
+  create-pr:
+    name: Open PR to main
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create Pull Request develop → main
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Check nếu đã có PR open rồi thì không tạo thêm
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              head: `${context.repo.owner}:develop`,
+              base: 'main'
+            });
+
+            if (prs.length > 0) {
+              console.log(`✅ PR already exists: #${prs[0].number}`);
+              return;
+            }
+
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚀 Release: develop → main (${new Date().toLocaleDateString('vi-VN')})`,
+              head: 'develop',
+              base: 'main',
+              body: `## 🚀 Release to Production\n\n✅ Staging deployment passed — sẵn sàng deploy lên production.\n\n### Checklist\n- [ ] Đã test trên staging\n- [ ] Reviewed code changes\n- [ ] Không có breaking changes\n\n**Merge PR này để trigger production deployment.**`
+            });
+
+            console.log(`Created PR #${pr.number}: ${pr.html_url}`);
